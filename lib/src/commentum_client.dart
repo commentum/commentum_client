@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:developer' as dev;
 import 'package:http/http.dart' as http;
 import './models/comment.dart';
-import './models/comment_extensions.dart';
 import './models/error.dart';
 import './models/response.dart';
 import './models/user.dart';
