@@ -16,6 +16,7 @@ import 'commentum_config.dart';
 class CommentumClient {
   final CommentumConfig config;
   final CommentumStorage storage;
+  final CommentumProvider preferredProvider;
   final http.Client _httpClient;
 
   /// In-memory cache of JWTs to minimize async storage reads.
@@ -31,6 +32,7 @@ class CommentumClient {
   CommentumClient({
     required this.config,
     required this.storage,
+    required this.preferredProvider,
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();
 
@@ -38,11 +40,10 @@ class CommentumClient {
   ///
   /// Call this immediately after instantiating the client.
   Future<void> init() async {
-    for (final provider in CommentumProvider.values) {
-      final token = await storage.getToken(provider);
-      if (token != null) {
-        _tokenCache[provider] = token;
-      }
+    final token = await storage.getToken(preferredProvider);
+    if (token != null) {
+      _tokenCache[preferredProvider] = token;
+      _activeProvider = preferredProvider;
     }
   }
 
@@ -57,8 +58,7 @@ class CommentumClient {
   CommentumProvider? get activeProvider => _activeProvider;
 
   /// Whether the [activeProvider] has a valid cached token.
-  bool get isLoggedIn =>
-      _activeProvider != null && _tokenCache.containsKey(_activeProvider);
+  bool get isLoggedIn => _activeProvider != null && _tokenCache.containsKey(_activeProvider);
 
   // ---------------------------------------------------------------------------
   // AUTHENTICATION
@@ -70,8 +70,7 @@ class CommentumClient {
   /// * [providerAccessToken]: The access token received from the provider's OAuth flow.
   ///
   /// Automatically caches the resulting JWT and sets the provider as active.
-  Future<void> login(
-      CommentumProvider provider, String providerAccessToken) async {
+  Future<void> login(CommentumProvider provider, String providerAccessToken) async {
     final data = await _request(
       '/auth',
       method: 'POST',
@@ -132,7 +131,8 @@ class CommentumClient {
   ///
   /// * [mediaId]: The ID of the media (anime/manga) in the external database.
   /// * [content]: The text body of the comment.
-  Future<Comment> createComment(String mediaId, String content, { required String? client }) async {
+  /// * [client]: Optional client identifier.
+  Future<Comment> createComment(String mediaId, String content, {String? client}) async {
     final data = await _request(
       '/posts',
       method: 'POST',
@@ -145,7 +145,8 @@ class CommentumClient {
   ///
   /// * [parentId]: The ID of the comment being replied to.
   /// * [content]: The text body of the reply.
-  Future<Comment> createReply(String parentId, String content, { required String? client }) async {
+  /// * [client]: Optional client identifier.
+  Future<Comment> createReply(String parentId, String content, {String? client}) async {
     final data = await _request(
       '/posts',
       method: 'POST',
@@ -235,13 +236,22 @@ class CommentumClient {
     await _request(
       '/reports',
       method: 'POST',
-      body: {'comment_id': commentId, 'reason': reason},
+      body: {'post_id': commentId, 'reason': reason},
     );
   }
 
   // ---------------------------------------------------------------------------
   // INTERNAL NETWORKING
   // ---------------------------------------------------------------------------
+
+  /// Clears an expired or invalid token from memory and storage.
+  Future<void> _clearExpiredToken(CommentumProvider provider) async {
+    _tokenCache.remove(provider);
+    await storage.deleteToken(provider);
+    if (_activeProvider == provider) {
+      _activeProvider = null;
+    }
+  }
 
   /// Performs the HTTP request, handles auth headers, and parses errors.
   ///
@@ -255,7 +265,6 @@ class CommentumClient {
     Map<String, dynamic>? body,
     Map<String, String>? params,
     bool useAuth = true,
-    bool isRetry = false,
   }) async {
     final url = Uri.parse('${config.baseUrl}$endpoint').replace(
       queryParameters: params,
@@ -291,20 +300,16 @@ class CommentumClient {
 
       switch (method.toUpperCase()) {
         case 'POST':
-          response =
-              await _httpClient.post(url, headers: headers, body: encodedBody);
+          response = await _httpClient.post(url, headers: headers, body: encodedBody);
           break;
         case 'PUT':
-          response =
-              await _httpClient.put(url, headers: headers, body: encodedBody);
+          response = await _httpClient.put(url, headers: headers, body: encodedBody);
           break;
         case 'PATCH':
-          response =
-              await _httpClient.patch(url, headers: headers, body: encodedBody);
+          response = await _httpClient.patch(url, headers: headers, body: encodedBody);
           break;
         case 'DELETE':
-          response = await _httpClient.delete(url,
-              headers: headers, body: encodedBody);
+          response = await _httpClient.delete(url, headers: headers, body: encodedBody);
           break;
         default:
           response = await _httpClient.get(url, headers: headers);
@@ -317,20 +322,18 @@ class CommentumClient {
         _logResponse(response, stopwatch.elapsedMilliseconds);
       }
 
-      // Handle 401 Unauthorized
-      if (response.statusCode == 401 &&
-          !isRetry &&
-          useAuth &&
-          _activeProvider != null) {
-        throw CommentumError('Unauthorized: Token expired or invalid', 401);
+      // Handle 401 Unauthorized - Clear expired token
+      if (response.statusCode == 401 && useAuth && _activeProvider != null) {
+        // Token is expired or invalid, clear it
+        await _clearExpiredToken(_activeProvider!);
+        throw CommentumError('Session expired. Please login again.', 401);
       }
 
       final dynamic responseBody;
       try {
         responseBody = jsonDecode(response.body);
       } catch (e) {
-        throw CommentumError(
-            'Invalid JSON response from server', response.statusCode);
+        throw CommentumError('Invalid JSON response from server', response.statusCode);
       }
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -362,14 +365,11 @@ class CommentumClient {
   // ---------------------------------------------------------------------------
 
   /// Logs outgoing requests in a structured, box-drawing format.
-  void _logRequest(
-      String method, Uri url, Map<String, String> headers, dynamic body) {
+  void _logRequest(String method, Uri url, Map<String, String> headers, dynamic body) {
     final buffer = StringBuffer();
-    buffer.writeln(
-        '╔══════════════════════════════════════════════════════════════╗');
+    buffer.writeln('╔══════════════════════════════════════════════════════════════╗');
     buffer.writeln('║ ↗️ REQUEST');
-    buffer.writeln(
-        '╠══════════════════════════════════════════════════════════════');
+    buffer.writeln('╠══════════════════════════════════════════════════════════════');
     buffer.writeln('║ URL: $method $url');
     buffer.writeln('║ Headers:');
     headers.forEach((k, v) => buffer.writeln('║   $k: $v'));
@@ -377,19 +377,16 @@ class CommentumClient {
       buffer.writeln('║ Body:');
       _prettyPrintJson(body, buffer);
     }
-    buffer.writeln(
-        '╚══════════════════════════════════════════════════════════════╝');
+    buffer.writeln('╚══════════════════════════════════════════════════════════════╝');
     dev.log(buffer.toString(), name: 'Commentum');
   }
 
   /// Logs incoming responses, including latency and formatted JSON body.
   void _logResponse(http.Response response, int latencyMs) {
     final buffer = StringBuffer();
-    buffer.writeln(
-        '╔══════════════════════════════════════════════════════════════╗');
+    buffer.writeln('╔══════════════════════════════════════════════════════════════╗');
     buffer.writeln('║ ↘️ RESPONSE [${response.statusCode}] (${latencyMs}ms)');
-    buffer.writeln(
-        '╠══════════════════════════════════════════════════════════════');
+    buffer.writeln('╠══════════════════════════════════════════════════════════════');
     buffer.writeln('║ Headers:');
     response.headers.forEach((k, v) => buffer.writeln('║   $k: $v'));
     buffer.writeln('║ Body:');
@@ -400,30 +397,25 @@ class CommentumClient {
       // If body isn't JSON, just print raw
       buffer.writeln('║   ${response.body}');
     }
-    buffer.writeln(
-        '╚══════════════════════════════════════════════════════════════╝');
+    buffer.writeln('╚══════════════════════════════════════════════════════════════╝');
     dev.log(buffer.toString(), name: 'Commentum');
   }
 
   /// Logs errors and exceptions, including stack traces if available.
   void _logError(dynamic error, int latencyMs, [StackTrace? stackTrace]) {
     final buffer = StringBuffer();
-    buffer.writeln(
-        '╔══════════════════════════════════════════════════════════════╗');
+    buffer.writeln('╔══════════════════════════════════════════════════════════════╗');
     buffer.writeln('║ ❌ ERROR (${latencyMs}ms)');
-    buffer.writeln(
-        '╠══════════════════════════════════════════════════════════════');
+    buffer.writeln('╠══════════════════════════════════════════════════════════════');
     buffer.writeln('║ Error: $error');
     if (stackTrace != null) {
       buffer.writeln('║ StackTrace:');
-      final traceLines =
-          stackTrace.toString().split('\n').take(5); // Limit to top 5 lines
+      final traceLines = stackTrace.toString().split('\n').take(5); // Limit to top 5 lines
       for (var line in traceLines) {
         if (line.isNotEmpty) buffer.writeln('║   $line');
       }
     }
-    buffer.writeln(
-        '╚══════════════════════════════════════════════════════════════╝');
+    buffer.writeln('╚══════════════════════════════════════════════════════════════╝');
     dev.log(buffer.toString(), name: 'Commentum', error: error);
   }
 
@@ -433,9 +425,7 @@ class CommentumClient {
     var encoder = JsonEncoder.withIndent('  ');
     var prettyString = encoder.convert(json);
     // Indent each line to align with the log box
-    prettyString
-        .split('\n')
-        .forEach((element) => buffer.writeln('$spaces$element'));
+    prettyString.split('\n').forEach((element) => buffer.writeln('$spaces$element'));
   }
 
   /// Closes the underlying HTTP client.
@@ -443,5 +433,3 @@ class CommentumClient {
     _httpClient.close();
   }
 }
-
-
