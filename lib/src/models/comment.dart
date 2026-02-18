@@ -60,7 +60,7 @@ class Comment {
           [],
       hasMoreReplies: json['has_more_replies'] ?? false,
       repliesCount: json['replies_count'] ?? 0,
-      userVote: json['user_vote'],
+      userVote: int.tryParse(json['user_vote']),
       rootId: json['root_id']?.toString(),
       parentId: json['parent_id']?.toString(),
       mediaId: json['media_id']?.toString(),
