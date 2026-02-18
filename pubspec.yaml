@@ -1,6 +1,6 @@
 name: commentum_client
 description: A Dart client for the Commentum API handling comments, replies, and moderation.
-version: 1.0.3
+version: 1.0.4
 
 environment:
   sdk: '>=3.4.0'

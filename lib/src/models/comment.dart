@@ -16,6 +16,7 @@ class Comment {
   final String? rootId;
   final String? parentId;
   final String? mediaId;
+  final String? mediaProvider;
   final String? client;
 
   Comment({
@@ -34,6 +35,7 @@ class Comment {
     this.rootId,
     this.parentId,
     this.mediaId,
+    this.mediaProvider,
     this.client,
   });
 
@@ -50,10 +52,8 @@ class Comment {
           CommentStatus.active,
       username: user?['username'] ?? 'Unknown',
       avatarUrl: user?['avatar_url'],
-      createdAt:
-          DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-      updatedAt:
-          DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
       replies: (json['replies'] as List<dynamic>?)
               ?.map((e) => Comment.fromJson(e))
               .toList() ??
@@ -64,6 +64,7 @@ class Comment {
       rootId: json['root_id']?.toString(),
       parentId: json['parent_id']?.toString(),
       mediaId: json['media_id']?.toString(),
+      mediaProvider: json['media_provider']?.toString(),
       client: json['client'],
     );
   }
@@ -84,6 +85,7 @@ class Comment {
     String? rootId,
     String? parentId,
     String? mediaId,
+    String? mediaProvider,
     String? client,
   }) {
     return Comment(
@@ -102,6 +104,7 @@ class Comment {
       rootId: rootId ?? this.rootId,
       parentId: parentId ?? this.parentId,
       mediaId: mediaId ?? this.mediaId,
+      mediaProvider: mediaProvider ?? this.mediaProvider,
       client: client ?? this.client,
     );
   }

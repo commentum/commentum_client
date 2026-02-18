@@ -91,6 +91,7 @@ final client = CommentumClient(
     enableLogging: true, // Disable in production
   ),
   storage: SecureTokenStorage(),
+  preferredProvider: CommentumProvider.anilist
 );
 
 void main() async {
@@ -155,6 +156,7 @@ final replies = response.data;
 ```dart
 final newComment = await client.createComment(
   'media_id_101', 
+  'anilist',
   'This episode was a masterpiece!',
   client: 'my_app_v1',
 );

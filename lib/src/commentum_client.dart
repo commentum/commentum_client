@@ -26,9 +26,10 @@ class CommentumClient {
 
   /// Creates a new [CommentumClient] instance.
   ///
-  /// * [config]: Configuration for base URL, timeouts, and logging.
-  /// * [storage]: Persistence strategy for tokens (e.g., SecureStorage, Hive).
-  /// * [httpClient]: Optional custom http client for testing or interception.
+  /// * [config] : Configuration for base URL, timeouts, and logging.
+  /// * [storage] : Persistence strategy for tokens (e.g., SecureStorage, Hive).
+  /// * [preferredProvider] : Initialize with a preferred provider [CommentumProvider].
+  /// * [httpClient] : Optional custom http client for testing or interception.
   CommentumClient({
     required this.config,
     required this.storage,
@@ -66,8 +67,8 @@ class CommentumClient {
 
   /// Exchanges a third-party [providerAccessToken] for a Commentum JWT.
   ///
-  /// * [provider]: The identity provider (e.g., MAL, Simkl).
-  /// * [providerAccessToken]: The access token received from the provider's OAuth flow.
+  /// * [provider] : The identity provider (e.g., MAL, Simkl).
+  /// * [providerAccessToken] : The access token received from the provider's OAuth flow.
   ///
   /// Automatically caches the resulting JWT and sets the provider as active.
   Future<void> login(CommentumProvider provider, String providerAccessToken) async {
@@ -129,23 +130,43 @@ class CommentumClient {
 
   /// Creates a new root-level comment on a media item.
   ///
-  /// * [mediaId]: The ID of the media (anime/manga) in the external database.
-  /// * [content]: The text body of the comment.
-  /// * [client]: Optional client identifier.
-  Future<Comment> createComment(String mediaId, String content, {String? client}) async {
+  /// [mediaId]
+  /// The unique identifier of the media (anime/manga) in the external database.
+  ///
+  /// Recommendation:
+  /// If using AniList, prefer storing the mal_id provided by AniList so IDs remain consistent across providers.
+
+  /// [mediaProvider]
+  /// The source database the mediaId belongs to.
+  ///
+  /// Examples:
+  /// - "mal" → MyAnimeList ID
+  /// - "anilist" → AniList ID
+  /// - "anilist|mal" or "mal|anilist" → When both providers reference the same ID value
+  ///
+  /// Keep this value consistent to avoid ambiguity when querying or aggregating media.
+
+  /// [content]
+  /// The textual body of the post or comment.
+  /// Must not exceed 500 characters.
+
+  /// [client] (optional)
+  /// Identifier of the client application creating the post
+  /// (e.g., "web", "ios", "android", "api").
+  Future<Comment> createComment(String mediaId, String mediaProvider, String content, {String? client}) async {
     final data = await _request(
       '/posts',
       method: 'POST',
-      body: {'media_id': mediaId, 'content': content, 'client': client},
+      body: {'media_id': mediaId, 'media_provider': mediaProvider, 'content': content, 'client': client},
     );
     return Comment.fromJson(data['post']);
   }
 
   /// Creates a reply to an existing comment.
   ///
-  /// * [parentId]: The ID of the comment being replied to.
-  /// * [content]: The text body of the reply.
-  /// * [client]: Optional client identifier.
+  /// * [parentId] : The ID of the comment being replied to.
+  /// * [content] : The text body of the reply.
+  /// * [client] : Optional client identifier.
   Future<Comment> createReply(String parentId, String content, {String? client}) async {
     final data = await _request(
       '/posts',
@@ -155,10 +176,17 @@ class CommentumClient {
     return Comment.fromJson(data['post']);
   }
 
-  /// Retrieves a paginated list of root comments for [mediaId].
+  /// Retrieves a paginated list of root comments for the specified [mediaId].
   ///
-  /// * [limit]: Max items to return (default: 20).
-  /// * [cursor]: Pagination cursor from a previous [CommentumResponse] result.
+  /// Media ID usage:
+  /// If using AniList as your provider, you may supply either:
+  /// - The AniList media_id, or
+  /// - The mal_id provided by AniList.
+  ///
+  /// Recommendation: Prefer using the mal_id for better cross-provider consistency.
+  ///
+  /// * [limit] : Maximum number of items to return (default: 20).
+  /// * [cursor] : Pagination cursor obtained from a previous CommentumResponse.
   Future<CommentumResponse> listComments(
     String mediaId, {
     int limit = 20,
@@ -173,8 +201,8 @@ class CommentumClient {
 
   /// Retrieves a paginated list of replies.
   ///
-  /// * [rootId]: The ID of the top-level ancestor comment.
-  /// * [parentId]: (Optional) Filter by direct parent ID.
+  /// * [rootId] : The ID of the top-level ancestor comment.
+  /// * [parentId] : (Optional) Filter by direct parent ID.
   Future<CommentumResponse> listReplies(
     String rootId, {
     int limit = 20,
@@ -191,8 +219,8 @@ class CommentumClient {
 
   /// Updates the text content of a comment.
   ///
-  /// * [commentId]: ID of the comment to edit.
-  /// * [content]: The new text content.
+  /// * [commentId] : ID of the comment to edit.
+  /// * [content] : The new text content.
   Future<Comment> updateComment(String commentId, String content) async {
     final data = await _request(
       '/posts',
@@ -215,8 +243,8 @@ class CommentumClient {
 
   /// Casts or updates a vote on a comment.
   ///
-  /// * [commentId]: The target comment ID.
-  /// * [voteType]: `1` (Upvote), `-1` (Downvote), or `0` (Remove vote).
+  /// * [commentId] : The target comment ID.
+  /// * [voteType] : `1` (Upvote), `-1` (Downvote), or `0` (Remove vote).
   Future<void> voteComment(String commentId, int voteType) async {
     await _request(
       '/votes',
@@ -227,8 +255,8 @@ class CommentumClient {
 
   /// Reports a comment for moderation.
   ///
-  /// * [commentId]: The ID of the offending comment.
-  /// * [reason]: A short string describing the violation (e.g. "Spam", "Spoiler").
+  /// * [commentId] : The ID of the offending comment.
+  /// * [reason] : A short string describing the violation (e.g. "Spam", "Spoiler").
   Future<void> reportComment({
     required String commentId,
     required String reason,
