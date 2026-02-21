@@ -42,25 +42,21 @@ class Comment {
   factory Comment.fromJson(Map<String, dynamic> json) {
     final user = json['user'] as Map<String, dynamic>?;
 
+    print(json['user_vote']);
+
     return Comment(
       id: json['id']?.toString() ?? '',
       content: json['content'] ?? '',
       score: json['score'] ?? 0,
-      status: CommentStatus.values
-              .where((e) => e.name == json['status'])
-              .firstOrNull ??
-          CommentStatus.active,
+      status: CommentStatus.values.where((e) => e.name == json['status']).firstOrNull ?? CommentStatus.active,
       username: user?['username'] ?? 'Unknown',
       avatarUrl: user?['avatar_url'],
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
-      replies: (json['replies'] as List<dynamic>?)
-              ?.map((e) => Comment.fromJson(e))
-              .toList() ??
-          [],
+      replies: (json['replies'] as List<dynamic>?)?.map((e) => Comment.fromJson(e)).toList() ?? [],
       hasMoreReplies: json['has_more_replies'] ?? false,
       repliesCount: json['replies_count'] ?? 0,
-      userVote: int.tryParse(json['user_vote']),
+      userVote: json['user_vote'],
       rootId: json['root_id']?.toString(),
       parentId: json['parent_id']?.toString(),
       mediaId: json['media_id']?.toString(),
