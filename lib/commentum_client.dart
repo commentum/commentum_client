@@ -8,4 +8,5 @@ export 'src/models/response.dart';
 export 'src/models/user.dart';
 export 'src/modules/auth_manager.dart';
 export 'src/modules/comment_manager.dart';
+export 'src/modules/discussion_controller.dart';
 export 'src/modules/interaction_manager.dart';

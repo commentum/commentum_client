@@ -12,12 +12,17 @@ class CommentumAuthManager {
   final CommentumProvider defaultProvider;
 
   final Map<CommentumProvider, String> _tokenCache = {};
+  final Map<CommentumProvider, String> _providerTokenCache = {};
   CommentumProvider? _activeProvider;
+
+  /// Optional callback to retrieve a fresh third-party access token if not cached locally.
+  Future<String?> Function(CommentumProvider provider)? onProviderTokenRefreshRequired;
 
   CommentumAuthManager({
     required this.storage,
     required CommentumHttpClient network,
     required this.defaultProvider,
+    this.onProviderTokenRefreshRequired,
   }) : _network = network {
     _network.getAuthToken = () {
       if (_activeProvider != null) {
@@ -26,9 +31,25 @@ class CommentumAuthManager {
       return null;
     };
     _network.onTokenExpired = () async {
-      if (_activeProvider != null) {
-        await _clearExpiredToken(_activeProvider!);
+      final provider = _activeProvider;
+      if (provider == null) return false;
+
+      String? providerToken = _providerTokenCache[provider] ?? await storage.getProviderToken(provider);
+      if (providerToken == null && onProviderTokenRefreshRequired != null) {
+        providerToken = await onProviderTokenRefreshRequired!(provider);
       }
+
+      if (providerToken != null && providerToken.isNotEmpty) {
+        try {
+          await login(provider, providerToken);
+          return true;
+        } catch (_) {
+          // Fallthrough to clear expired token if silent re-login fails
+        }
+      }
+
+      await _clearExpiredToken(provider);
+      return false;
     };
   }
 
@@ -38,6 +59,12 @@ class CommentumAuthManager {
     final allTokens = await storage.getAllTokens();
     _tokenCache.clear();
     _tokenCache.addAll(allTokens);
+
+    _providerTokenCache.clear();
+    for (final p in CommentumProvider.values) {
+      final pToken = await storage.getProviderToken(p);
+      if (pToken != null) _providerTokenCache[p] = pToken;
+    }
 
     if (_tokenCache.containsKey(defaultProvider)) {
       _activeProvider = defaultProvider;
@@ -102,7 +129,9 @@ class CommentumAuthManager {
     }
 
     _tokenCache[provider] = jwt;
+    _providerTokenCache[provider] = providerAccessToken;
     await storage.saveToken(provider, jwt);
+    await storage.saveProviderToken(provider, providerAccessToken);
     _activeProvider = provider;
   }
 
@@ -124,7 +153,9 @@ class CommentumAuthManager {
     }
 
     _tokenCache.remove(targetProvider);
+    _providerTokenCache.remove(targetProvider);
     await storage.deleteToken(targetProvider);
+    await storage.deleteProviderToken(targetProvider);
 
     if (_activeProvider == targetProvider) {
       _activeProvider =
@@ -140,6 +171,7 @@ class CommentumAuthManager {
     }
     await storage.clearAll();
     _tokenCache.clear();
+    _providerTokenCache.clear();
     _activeProvider = defaultProvider;
   }
 
@@ -173,7 +205,9 @@ class CommentumAuthManager {
 
   Future<void> _clearExpiredToken(CommentumProvider provider) async {
     _tokenCache.remove(provider);
+    _providerTokenCache.remove(provider);
     await storage.deleteToken(provider);
+    await storage.deleteProviderToken(provider);
     if (_activeProvider == provider) {
       _activeProvider =
           _tokenCache.isNotEmpty ? _tokenCache.keys.first : defaultProvider;

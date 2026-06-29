@@ -7,6 +7,7 @@ import 'models/response.dart';
 import 'models/user.dart';
 import 'modules/auth_manager.dart';
 import 'modules/comment_manager.dart';
+import 'modules/discussion_controller.dart';
 import 'modules/interaction_manager.dart';
 import 'network/commentum_http_client.dart';
 
@@ -31,17 +32,20 @@ class CommentumClient {
   /// * [config]: Configuration for base URL, timeouts, and logging.
   /// * [storage]: Persistence strategy for tokens (e.g., [InMemoryCommentumStorage] or secure storage).
   /// * [preferredProvider]: Initial default provider to activate upon hydration.
+  /// * [onProviderTokenRefreshRequired]: Optional callback triggered when JWT expires to retrieve fresh provider token.
   /// * [httpClient]: Optional custom [http.Client] for interception or testing.
   CommentumClient({
     required this.config,
     required this.storage,
     required this.preferredProvider,
+    Future<String?> Function(CommentumProvider provider)? onProviderTokenRefreshRequired,
     http.Client? httpClient,
   }) : _network = CommentumHttpClient(config: config, httpClient: httpClient) {
     auth = CommentumAuthManager(
       storage: storage,
       network: _network,
       defaultProvider: preferredProvider,
+      onProviderTokenRefreshRequired: onProviderTokenRefreshRequired,
     );
     comments = CommentumCommentManager(
       config: config,
@@ -185,6 +189,18 @@ class CommentumClient {
     required String reason,
   }) =>
       interactions.reportComment(commentId: commentId, reason: reason);
+
+  /// Creates a self-contained [CommentumDiscussionController] that manages discussion state,
+  /// pagination, optimistic voting, replies insertion, and deletion automatically.
+  CommentumDiscussionController getDiscussionController({
+    required String mediaId,
+    required String mediaProvider,
+  }) =>
+      CommentumDiscussionController(
+        client: this,
+        mediaId: mediaId,
+        mediaProvider: mediaProvider,
+      );
 
   /// Closes the underlying HTTP client resources.
   void dispose() {

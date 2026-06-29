@@ -18,12 +18,22 @@ abstract class CommentumStorage {
 
   /// Clears all saved tokens across all providers.
   Future<void> clearAll();
+
+  /// Saves the third-party access token for [provider] to enable automatic relogin upon JWT expiry.
+  Future<void> saveProviderToken(CommentumProvider provider, String token) async {}
+
+  /// Retrieves the third-party access token for [provider].
+  Future<String?> getProviderToken(CommentumProvider provider) async => null;
+
+  /// Deletes the third-party access token for [provider].
+  Future<void> deleteProviderToken(CommentumProvider provider) async {}
 }
 
 /// A ready-to-use in-memory implementation of [CommentumStorage].
 /// Ideal for testing, short-lived applications, or fallback scenarios.
 class InMemoryCommentumStorage implements CommentumStorage {
   final Map<CommentumProvider, String> _tokens = {};
+  final Map<CommentumProvider, String> _providerTokens = {};
 
   @override
   Future<void> saveToken(CommentumProvider provider, String token) async {
@@ -48,5 +58,21 @@ class InMemoryCommentumStorage implements CommentumStorage {
   @override
   Future<void> clearAll() async {
     _tokens.clear();
+    _providerTokens.clear();
+  }
+
+  @override
+  Future<void> saveProviderToken(CommentumProvider provider, String token) async {
+    _providerTokens[provider] = token;
+  }
+
+  @override
+  Future<String?> getProviderToken(CommentumProvider provider) async {
+    return _providerTokens[provider];
+  }
+
+  @override
+  Future<void> deleteProviderToken(CommentumProvider provider) async {
+    _providerTokens.remove(provider);
   }
 }

@@ -60,6 +60,15 @@ class CommentumConfig {
   /// Whether verbose JSON headers & body structured logging is enabled.
   final bool verboseLogging;
 
+  /// Whether automatic retries on network/server errors and token re-login on expiry are enabled.
+  final bool autoRetry;
+
+  /// Maximum number of retry attempts for failed network requests.
+  final int maxRetries;
+
+  /// Base delay between retry attempts.
+  final Duration retryDelay;
+
   const CommentumConfig({
     required this.baseUrl,
     this.appClient,
@@ -67,5 +76,8 @@ class CommentumConfig {
     this.receiveTimeout = const Duration(seconds: 10),
     this.enableLogging = false,
     this.verboseLogging = false,
+    this.autoRetry = true,
+    this.maxRetries = 2,
+    this.retryDelay = const Duration(seconds: 1),
   });
 }

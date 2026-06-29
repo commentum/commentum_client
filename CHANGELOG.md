@@ -1,22 +1,6 @@
-## 1.0.0
+## 1.2.0
 
-* Initial release
-
-## 1.0.1
-
-* Added verbose logging option
-
-## 1.0.2
-
-* Added client parameter to createComment and createReply methods
-
-## 1.0.3
-
-* Updated Comment model with unified structure fields
-* Added CommentumResponse wrapper with count and nextCursor
-* Added Comment extension methods for voting, deleting, and reporting
-
-## 1.0.4
-* Added support for initializing the client with a preferred media provider.
-* Updated the Comment model to include `media_provider` field.
-* Updated `Client.createComment()` to accept a `mediaProvider` parameter.
+* **Automatic Retries & Token Relogin**: Added `autoRetry`, `maxRetries`, and `retryDelay` to `CommentumConfig` for automatic network error retries.
+* Added silent token re-login loop upon receiving HTTP 401 expiration responses via `onProviderTokenRefreshRequired` callback and provider token storage.
+* **Stateful Discussion Controller**: Added `CommentumDiscussionController` and `CommentTreeUtils` to automatically manage loading, pagination, tree insertions for replies, optimistic voting updates, and deletions.
+* Added `saveProviderToken`, `getProviderToken`, and `deleteProviderToken` to `CommentumStorage` interface.
