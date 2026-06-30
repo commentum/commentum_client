@@ -1,5 +1,5 @@
 import '../commentum_client.dart';
-import 'comment.dart';
+import '../models/comment.dart';
 
 extension CommentActions on Comment {
   /// Upvotes this comment (+1). Sending twice toggles/removes upvote.

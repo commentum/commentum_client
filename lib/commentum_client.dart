@@ -2,7 +2,7 @@ export 'src/commentum_client.dart';
 export 'src/commentum_config.dart';
 export 'src/commentum_storage.dart';
 export 'src/models/comment.dart';
-export 'src/models/comment_extensions.dart';
+export 'src/utils/comment_extensions.dart';
 export 'src/models/error.dart';
 export 'src/models/response.dart';
 export 'src/models/user.dart';
